@@ -83,8 +83,9 @@ void generateLevel() {
 
     if (blocksInRow > 0) {
       const int color = rand() % 4;
-      const int colorSpread = 1 + rand() % 3;
-      const int colorRunLength = 1 + rand() % 3;
+      const int colorSpread = 1 + rand() % 2;
+      const int colorRunLength = 1 + rand() % 2;
+      const int colorRunSkip = 1 + rand() % 3;
       const int width = min(10 + rand() % max(1, SCREEN_WIDTH / blocksInRow - 10), SCREEN_WIDTH / 4);
       int offset;
       switch (rand() % 8) {
@@ -105,7 +106,7 @@ void generateLevel() {
         block->rect.h = 6;
         block->rect.x = offset + i * width;
         block->rect.y = blockY;
-        block->color = (color + (i / colorRunLength) % colorSpread) % 4;
+        block->color = (color + ((i / colorRunLength) % colorSpread) * colorRunSkip) % 4;
       }
       blockCount += blocksInRow;
     }
@@ -134,7 +135,7 @@ void update() {
   ball.x += ballDx;
   ball.y += ballDy;
 
-  if (ball.x <= 0 || ball.x >= SCREEN_WIDTH - 1) {
+  if (ball.x <= 0 || ball.x + ball.w >= SCREEN_WIDTH) {
     ballDx = -ballDx;
   }
   if (ball.y <= 0) {
@@ -142,10 +143,10 @@ void update() {
   } else if (
     ball.y + ball.h == paddle.y
     && ball.x + ball.w >= paddle.x
-    && ball.x - ball.w < paddle.x + paddle.w
+    && ball.x < paddle.x + paddle.w
   ) {
     ballDy = -ballDy;
-  } else if (ball.y >= SCREEN_HEIGHT) {
+  } else if (ball.y + ball.h >= SCREEN_HEIGHT) {
     reset();
     return;
   }
@@ -157,15 +158,15 @@ void update() {
     if (blocks[i].alive) {
       const SDL_Rect* rect = &blocks[i].rect;
       if (
-        (ball.x + ball.w == rect->x || ball.x - ball.w == rect->x + rect->w)
-        && (ball.y + ball.h >= rect->y && ball.y - ball.h < rect->y + rect->h)
+        (ball.x + ball.w >= rect->x - 1 && ball.x <= rect->x + rect->w)
+        && (ball.y + ball.h > rect->y && ball.y < rect->y + rect->h)
       ) {
         blocks[i].alive = false;
         reflectX = true;
       }
       if (
-        (ball.y + ball.h == rect->y || ball.y - ball.h == rect->y + rect->h)
-        && (ball.x + ball.w >= rect->x && ball.x - ball.w < rect->x + rect->w)
+        (ball.y + ball.h >= rect->y - 1 && ball.y <= rect->y + rect->h)
+        && (ball.x + ball.w > rect->x && ball.x < rect->x + rect->w)
       ) {
         blocks[i].alive = false;
         reflectY = true;
