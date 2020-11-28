@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="stylesheet.css" />
+
+    <title>breakout</title>
+  </head>
+  <body>
+    <div>
+      <canvas id="canvas" />
+    </div>
+
+    <script type="text/javascript">
+      var Module = {
+        canvas: (function() { return document.getElementById("canvas"); })()
+      };
+    </script>
+    <script src="breakout.js"></script>
+  </body>
+</html>
