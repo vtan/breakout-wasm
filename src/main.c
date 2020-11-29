@@ -8,6 +8,7 @@
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 128
 #define MAX_BLOCKS 64
+#define UPDATES_PER_SEC 60
 
 #define min(a, b) (((a) < (b)) ? (a) : (b))
 #define max(a, b) (((a) > (b)) ? (a) : (b))
@@ -27,7 +28,11 @@ int ballDx;
 int ballDy;
 struct Block blocks[MAX_BLOCKS];
 size_t blockCount;
-unsigned int runAfter;
+uint64_t ticksPerUpdate;
+uint64_t ticksAccumulated = 0;
+uint64_t ticksLastFrame;
+uint64_t ticksNow;
+uint64_t runAfterTicks;
 
 const uint8_t blockColors[4][3] = {
   { 0x63, 0x66, 0x62 },
@@ -48,6 +53,9 @@ int main() {
   SDL_EventState(SDL_KEYDOWN, SDL_DISABLE);
   SDL_EventState(SDL_KEYUP, SDL_DISABLE);
 
+  ticksPerUpdate = (uint64_t) (SDL_GetPerformanceFrequency() / (double) UPDATES_PER_SEC);
+  ticksLastFrame = SDL_GetPerformanceCounter();
+
   SDL_Window* window = SDL_CreateWindow("", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, 0);
   renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
 
@@ -66,7 +74,7 @@ void reset() {
     generateLevel();
   } while (blockCount == 0);
 
-  runAfter = SDL_GetTicks() + 1000;
+  runAfterTicks = ticksNow + UPDATES_PER_SEC * ticksPerUpdate;
 }
 
 void generateLevel() {
@@ -114,21 +122,29 @@ void generateLevel() {
 }
 
 void frame() {
-  while (SDL_PollEvent(&event)) {
-    if (event.type == SDL_MOUSEMOTION) {
-      paddle.x = event.motion.x - paddle.w / 2;
-      if (paddle.x < 0) {
-        paddle.x = 0;
-      } else if (paddle.x >= SCREEN_WIDTH - paddle.w) {
-        paddle.x = SCREEN_WIDTH - paddle.w;
+  ticksNow = SDL_GetPerformanceCounter();
+  ticksAccumulated += ticksNow - ticksLastFrame;
+  if (ticksAccumulated >= ticksPerUpdate) {
+    while (SDL_PollEvent(&event)) {
+      if (event.type == SDL_MOUSEMOTION) {
+        paddle.x = event.motion.x - paddle.w / 2;
+        if (paddle.x < 0) {
+          paddle.x = 0;
+        } else if (paddle.x >= SCREEN_WIDTH - paddle.w) {
+          paddle.x = SCREEN_WIDTH - paddle.w;
+        }
       }
     }
-  }
 
-  if (SDL_GetTicks() >= runAfter) {
-    update();
+    for (; ticksAccumulated >= ticksPerUpdate; ticksAccumulated -= ticksPerUpdate) {
+      if (ticksNow >= runAfterTicks) {
+        update();
+      }
+    }
+
+    render();
   }
-  render();
+  ticksLastFrame = ticksNow;
 }
 
 void update() {
