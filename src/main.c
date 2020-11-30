@@ -1,4 +1,5 @@
 #include <emscripten.h>
+#include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -8,7 +9,7 @@
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 128
 #define MAX_BLOCKS 64
-#define UPDATES_PER_SEC 60
+#define UPDATES_PER_SEC (2 * 60)
 
 #define min(a, b) (((a) < (b)) ? (a) : (b))
 #define max(a, b) (((a) > (b)) ? (a) : (b))
@@ -19,13 +20,19 @@ struct Block {
   uint8_t color;
 };
 
+struct Ball {
+  SDL_Rect rect;
+  double x;
+  double y;
+  double dx;
+  double dy;
+};
+
 SDL_Renderer *renderer;
 SDL_Event event;
 
-SDL_Rect paddle = { .x = 0, .y = SCREEN_HEIGHT - 6, .w = 16, .h = 3 };
-SDL_Rect ball = { .w = 2, .h = 2 };
-int ballDx;
-int ballDy;
+SDL_Rect paddle = { .x = 0, .y = SCREEN_HEIGHT - 6, .w = 20, .h = 3 };
+struct Ball ball = { .rect = { .w = 3, .h = 3 } };
 struct Block blocks[MAX_BLOCKS];
 size_t blockCount;
 uint64_t ticksPerUpdate;
@@ -45,6 +52,7 @@ void reset();
 void generateLevel();
 void frame();
 void update();
+bool rectsIntersect(SDL_Rect, SDL_Rect);
 void render();
 
 int main() {
@@ -67,8 +75,10 @@ int main() {
 void reset() {
   ball.x = SCREEN_WIDTH / 2 - 1;
   ball.y = SCREEN_HEIGHT - 20;
-  ballDx = 1;
-  ballDy = -1;
+  ball.dx = 0.5;
+  ball.dy = -0.6;
+  ball.rect.x = ball.x;
+  ball.rect.y = ball.y;
 
   do {
     generateLevel();
@@ -148,21 +158,36 @@ void frame() {
 }
 
 void update() {
-  ball.x += ballDx;
-  ball.y += ballDy;
+  ball.x += ball.dx;
+  ball.y += ball.dy;
+  ball.rect.x = (int) round(ball.x);
+  ball.rect.y = (int) round(ball.y);
 
-  if (ball.x <= 0 || ball.x + ball.w >= SCREEN_WIDTH) {
-    ballDx = -ballDx;
+  if (ball.rect.x <= 0 || ball.rect.x + ball.rect.w >= SCREEN_WIDTH) {
+    ball.dx = -ball.dx;
   }
-  if (ball.y <= 0) {
-    ballDy = -ballDy;
+  if (ball.rect.y <= 0) {
+    ball.dy = -ball.dy;
   } else if (
-    ball.y + ball.h == paddle.y
-    && ball.x + ball.w >= paddle.x
-    && ball.x < paddle.x + paddle.w
+    ball.dy > 0
+    && ball.rect.y + ball.rect.h >= paddle.y + 1
+    && rectsIntersect(ball.rect, paddle)
   ) {
-    ballDy = -ballDy;
-  } else if (ball.y + ball.h >= SCREEN_HEIGHT) {
+    const double ratio = (ball.rect.x - paddle.x) / (double) paddle.w;
+    if (ratio < 0.25) {
+      ball.dx = -0.6;
+      ball.dy = -0.5;
+    } else if (ratio < 0.5) {
+      ball.dx = -0.5;
+      ball.dy = -0.6;
+    } else if (ratio < 0.75) {
+      ball.dx = 0.5;
+      ball.dy = -0.6;
+    } else {
+      ball.dx = 0.6;
+      ball.dy = -0.5;
+    }
+  } else if (ball.rect.y + ball.rect.h >= SCREEN_HEIGHT) {
     reset();
     return;
   }
@@ -173,19 +198,10 @@ void update() {
   for (size_t i = 0; i < blockCount; ++i) {
     if (blocks[i].alive) {
       const SDL_Rect* rect = &blocks[i].rect;
-      if (
-        (ball.x + ball.w >= rect->x - 1 && ball.x <= rect->x + rect->w)
-        && (ball.y + ball.h > rect->y && ball.y < rect->y + rect->h)
-      ) {
+      if (rectsIntersect(ball.rect, *rect)) {
         blocks[i].alive = false;
-        reflectX = true;
-      }
-      if (
-        (ball.y + ball.h >= rect->y - 1 && ball.y <= rect->y + rect->h)
-        && (ball.x + ball.w > rect->x && ball.x < rect->x + rect->w)
-      ) {
-        blocks[i].alive = false;
-        reflectY = true;
+        reflectX = ball.rect.x + ball.rect.w - 1 == rect->x || ball.rect.x == rect->x + rect->w - 1;
+        reflectY = ball.rect.y + ball.rect.h - 1 == rect->y || ball.rect.y == rect->y + rect->h - 1;
       }
     }
     anyBlockAlive |= blocks[i].alive;
@@ -194,8 +210,15 @@ void update() {
     reset();
     return;
   }
-  ballDx = reflectX ? -ballDx : ballDx;
-  ballDy = reflectY ? -ballDy : ballDy;
+  ball.dx = reflectX ? -ball.dx : ball.dx;
+  ball.dy = reflectY ? -ball.dy : ball.dy;
+}
+
+bool rectsIntersect(SDL_Rect rect1, SDL_Rect rect2) {
+  return rect1.x < rect2.x + rect2.w
+    && rect1.x + rect1.w > rect2.x
+    && rect1.y < rect2.y + rect2.h
+    && rect1.y + rect1.h > rect2.y;
 }
 
 void render() {
@@ -215,7 +238,7 @@ void render() {
   SDL_RenderDrawRect(renderer, &paddle);
 
   SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
-  SDL_RenderFillRect(renderer, &ball);
+  SDL_RenderFillRect(renderer, &ball.rect);
 
   SDL_RenderPresent(renderer);
 }
