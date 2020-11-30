@@ -13,6 +13,7 @@ canvas {
   height: 256px;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
+  cursor: none !important;
 }
 
 @media (min-width: 612px) {
